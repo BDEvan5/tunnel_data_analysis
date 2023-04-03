@@ -141,6 +141,7 @@ def run_simulation(svr, scalery, test_true_times, X_test, inside_temp_sim):
     predictions_svr = np.array(inside_temp_sim).flatten()
 
     predicted_internal_temp = np.array(predicted_internal_temp)[:, 0, 0]
+    print(f"Temp shape: {predicted_internal_temp.shape}")
     svr_r2_sim = round(r2_score(test_true_result[0:len(test_true_times)-12], predicted_internal_temp),2)
     svr_mse_sim = round(math.sqrt(mean_squared_error(test_true_result[0:len(test_true_times)-12], predicted_internal_temp)),2)
 

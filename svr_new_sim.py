@@ -82,11 +82,6 @@ def test_svr_model(svr):
     print(f"Prediction score: {predict_score}")
 
     inside_temp_sim = []
-    input_sim = X_test[0,:]      
-    prev_sol = 0
-    prev_inside_temp = 0
-    prev_outside_temp = 0
-    datapoint_no = 285
     inside_temp_sim.append(scalery.inverse_transform(test_y[0].reshape(1,-1)))
 
     
@@ -95,57 +90,64 @@ def test_svr_model(svr):
 
 def run_simulation(svr, scalery, test_true_times, X_test, inside_temp_sim):
     N = len(test_true_times)
-    
+    print(f"N: {N}")
+
     predicted_tempteratures = np.zeros((N-12,12))
+    tempterature_errors = np.zeros((len(test_true_times)-12,12))
     
     for i in range(N-12):
-        input_sim = X_test[i,:].reshape(1,-1)
-        predicted_scaled_temp = svr.predict(input_sim)
-        predicted_tempterature = scalery.inverse_transform(predicted_scaled_temp.reshape(1,-1))
-        inside_temp_sim.append(predicted_tempterature)
+        sim_input = X_test[i,:].reshape(1,-1)
+
+        for j in range(12):
+            predicted_scaled_temp = svr.predict(sim_input)
+            predicted_tempterature = scalery.inverse_transform(predicted_scaled_temp.reshape(1,-1))
+            inside_temp_sim.append(predicted_tempterature)
+
+
     
     prev_fan = 0
     j = 0
     predicted_internal_temp = []
-    tempterature_errors = np.zeros((len(test_true_times)-12,12))
     fan_pred = []
 
     while len(test_true_times)-j > 12:
-        pred_vec = []
+        # pred_vec = []
         input_sim = X_test[j,:]
+        previous_predicted_temp = X_test[j, 2]
         
         for i in range(0,12):
             input_sim = input_sim.reshape(1,-1)
                                 
             predicted_scaled_temp = svr.predict(input_sim)
             predicted_tempterature = scalery.inverse_transform(predicted_scaled_temp.reshape(1,-1))
-            pred_vec.append(predicted_tempterature)
+            # pred_vec.append(predicted_tempterature)
+            previous_predicted_temp = predicted_tempterature
             
-            tempterature_errors[j][i] = math.sqrt((test_true_result[j+i] - pred_vec[i])**2)
+            tempterature_errors[j][i] = math.sqrt((test_true_result[j+i] - predicted_tempterature)**2)
             
-            if i == 11:  
-                predicted_internal_temp.append(pred_vec[i])
-                fan_pred.append(prev_fan*5)
-
             prev_sol = X_test[j+i,0]
             prev_outside_temp = X_test[j+i,1]
-            prev_predicted_temp = pred_vec[i-1].reshape(-1,1)
+            prev_predicted_temp = previous_predicted_temp.reshape(-1,1)
             prev_inside_temp_scaled = scalery.transform(prev_predicted_temp)[0, 0]
 
             input_sim = np.array([prev_sol, prev_outside_temp, prev_inside_temp_scaled, prev_fan])
+            previous_predicted_temp = predicted_tempterature
         
             temp_temp = prev_predicted_temp[0,0]
             if prev_fan == 1 and temp_temp > 22:
                 temp_fan = 1
             elif prev_fan == 1 and temp_temp <= 22:
                 temp_fan = 0
-
-            if prev_fan == 0 and temp_temp < 30:
+            elif prev_fan == 0 and temp_temp < 30:
                 temp_fan = 0
             elif prev_fan == 0 and temp_temp >= 30:
                 temp_fan = 1
             prev_fan = temp_fan
             
+
+        predicted_internal_temp.append(predicted_tempterature)
+        fan_pred.append(prev_fan*5)
+
         j += 1
 
     predictions_svr = np.array(inside_temp_sim).flatten()
@@ -153,12 +155,12 @@ def run_simulation(svr, scalery, test_true_times, X_test, inside_temp_sim):
     predicted_internal_temp = np.array(predicted_internal_temp)[:, 0, 0]
     svr_r2_sim = round(r2_score(test_true_result[0:len(test_true_times)-12], predicted_internal_temp),2)
     svr_mse_sim = round(math.sqrt(mean_squared_error(test_true_result[0:len(test_true_times)-12], predicted_internal_temp)),2)
-
-    predict_mae = mean_absolute_error(test_true_result[0:len(test_true_times)-12], predicted_internal_temp)
-    print("MAE=" + str(predict_mae))
-    MBE(test_true_result[0:len(test_true_times)-12], predictions_svr)
     print("R2=" + str(svr_r2_sim))
     print("RMSE: " + str(svr_mse_sim))
+
+    # predict_mae = mean_absolute_error(test_true_result[0:len(test_true_times)-12], predicted_internal_temp)
+    # print("MAE=" + str(predict_mae))
+    # MBE(test_true_result[0:len(test_true_times)-12], predictions_svr)
     
     return predicted_internal_temp, tempterature_errors, fan_pred
 
