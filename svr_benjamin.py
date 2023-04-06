@@ -59,7 +59,7 @@ def load_test_data(filename):
     return x, y, data, scalery
 
 def train_svr_model():
-    X_train, train_y = load_train_data("training.csv")
+    X_train, train_y = load_train_data("Data/training.csv")
     
     svr_regr = SVR(kernel="rbf", epsilon=0.02894736842105263, C=7.63157894736842, gamma=1.3526315789473684)    # 1 day simulation with time (BEST)
     # svr_regr = SVR(kernel="rbf", epsilon=0.1, C=6.8965517241379315, gamma=0.7827586206)    # No time or delta temperature, best results
@@ -69,7 +69,7 @@ def train_svr_model():
 
 def test_svr_model(svr):
     scalery = MinMaxScaler()
-    X_test, test_y, df_test, scalery = load_test_data("TestSet.csv")
+    X_test, test_y, df_test, scalery = load_test_data("Data/TestSet.csv")
     
     test_true_times = df_test['Minute']
     test_true_result = np.array(df_test['Actual Temperature Middle ((T[n])'])
@@ -178,14 +178,15 @@ def plot_data(test_true_times, test_true_result, plot_array, X_test, fan_pred, e
     x_labels = np.arange(0,len(test_true_times),1)
 
     plt.plot(x_labels[0:len(test_true_times)-12],test_true_result[0:len(test_true_times)-12], color='blue', alpha = 0.8, label='Actual Temperature')
-    plt.plot(x_labels[0:len(test_true_times)-12],plot_array, color='red', alpha=0.7, label='Time Ahead Prediction')
-    plt.plot(x_labels[0:len(test_true_times)-12], X_test[:len(test_true_times)-12,3]*5, color='black', alpha=0.8, label='Actual Fan State')
+    plt.plot(x_labels[0:len(test_true_times)-12],plot_array, color='red', alpha=0.7, label='Predicted Temperature (1 hour ahead)')
+    plt.plot(x_labels[0:len(test_true_times)-12], X_test[:len(test_true_times)-12,3]*5, color='black', alpha=0.8, label='True Fan State')
     plt.plot(x_labels[0:len(test_true_times)-12], np.array(fan_pred)*0.8, color='green', label='Simulated Fan State')
 
     plt.xlabel("Time (5-minute Intervals)", fontsize=15)
     plt.ylabel("Temperature (deg. C)", fontsize=15)
     plt.ylim(0, 37)
-    plt.legend(loc='lower left')
+    # plt.legend(loc=' left')\
+    plt.legend(loc='center', bbox_to_anchor=(0.5, 1.1), ncol=2)
     plt.xticks(rotation=90)
     plt.grid(False)              
     plt.savefig('Imgs/Benjamin-result_1')    

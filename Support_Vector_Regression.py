@@ -49,8 +49,8 @@ def MBE(y_true, y_pred):
     
     
 # Load data
-train = pd.read_csv(r"training.csv")
-test = pd.read_csv(r"TestSet.csv")
+train = pd.read_csv(r"Data/training.csv")
+test = pd.read_csv(r"Data/TestSet.csv")
 
 # Normalize data
 scalerx = MinMaxScaler()

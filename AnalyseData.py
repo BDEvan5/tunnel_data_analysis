@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 
 def read_data():
-    data = pd.read_csv("training.csv")
+    data = pd.read_csv("Data/training.csv")
     solar_radiation = data['Solar Radiation (W/m^2)'].to_numpy()
     outside_temp = data["Outside Temperature (T[n-1])"].to_numpy()
     inside_previous_temp = data["Inside Temperature Middle (T[n-1])"].to_numpy()

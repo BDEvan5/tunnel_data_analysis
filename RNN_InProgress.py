@@ -7,11 +7,11 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 
-data = pd.read_csv("training.csv")
+data = pd.read_csv("Data/training.csv")
 
 # Select relevant features
 data = data[['Solar Radiation (W/m^2)', 'Outside Temperature (T[n-1])','Inside Temperature Middle (T[n-1])', 'Fan on/off', 'Actual Temperature Middle ((T[n])']]
-data_test = pd.read_csv("TestSet.csv")
+data_test = pd.read_csv("Data/TestSet.csv")
 data_test = data_test[['Solar Radiation (W/m^2)', 'Outside Temperature (T[n-1])','Inside Temperature Middle (T[n-1])', 'Fan on/off', 'Actual Temperature Middle ((T[n])']]
 
 # Scale the data

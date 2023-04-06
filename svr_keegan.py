@@ -51,7 +51,7 @@ def load_test_data(filename):
     return x, y, data, scalery
 
 def train_svr_model():
-    X_train, train_y = load_train_data("training.csv")
+    X_train, train_y = load_train_data("Data/training.csv")
     
     svr_regr = SVR(kernel="rbf", epsilon=0.02894736842105263, C=7.63157894736842, gamma=1.3526315789473684)    # 1 day simulation with time (BEST)
     # svr_regr = SVR(kernel="rbf", epsilon=0.1, C=6.8965517241379315, gamma=0.7827586206)    # No time or delta temperature, best results
@@ -61,7 +61,7 @@ def train_svr_model():
 
 def test_svr_model(svr):
     scalery = MinMaxScaler()
-    X_test, test_y, df_test, scalery = load_test_data("TestSet.csv")
+    X_test, test_y, df_test, scalery = load_test_data("Data/TestSet.csv")
     
     test_true_times = df_test['Minute']
     test_true_result = np.array(df_test['Actual Temperature Middle ((T[n])'])
