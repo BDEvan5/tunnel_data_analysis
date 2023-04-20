@@ -4,7 +4,7 @@
 - **Imgs**: Result images
     - Benjamin: results from Benjamin using corrected test environment.
     - keegan: results from original code
-    - keegan clean: results from Benjamin's cleaned up version 
+    - keegan clean: results from Benjamin's cleaned up version of Keegan's work
 
 
 

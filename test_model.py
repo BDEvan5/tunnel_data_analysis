@@ -36,6 +36,10 @@ def load_train_data(filename):
     x = scalerx.fit_transform(data[['Solar Radiation (W/m^2)', 'Outside Temperature (T[n-1])','Inside Temperature Middle (T[n-1])', 'Fan on/off']])
     y = scalery.fit_transform(data[['Actual Temperature Middle ((T[n])']])[:, 0]
     
+    # n_samples = 500
+    # x = x[:n_samples]
+    # y = y[:n_samples]
+    
     return x, y
 
 def load_test_data(filename):
@@ -48,6 +52,10 @@ def load_test_data(filename):
     y_data = data[['Actual Temperature Middle ((T[n])']].to_numpy()
     y = scalery.fit_transform(y_data)[:, 0]
         
+    # n_samples = 500
+    # x = x[:n_samples]
+    # y = y[:n_samples]
+    
     return x, y, data, scalery
 
 def train_svr_model():
@@ -75,15 +83,15 @@ def test_svr_model(svr):
     inside_temp_sim = []
     inside_temp_sim.append(scalery.inverse_transform(test_y[0].reshape(1,-1)))
 
-    return test_true_result, X_test, scalery, inside_temp_sim, test_true_times
+    return test_true_times, test_true_result, X_test, scalery, inside_temp_sim
 
 
-def run_simulation_benjamin(svr, scalery, X_test):
-    N = len(X_test)
+def run_simulation_benjamin(svr, scalery, test_true_times, X_test):
+    N = len(test_true_times)
     
     predicted_tempteratures = np.zeros((N-12,12))
     fan_predictions = np.zeros(N-12)
-    tempterature_errors = np.zeros((N-12,12))
+    tempterature_errors = np.zeros((len(test_true_times)-12,12))
     
     for i in range(N-12): # steps through each element in test data
         input_sim = X_test[i,:].reshape(1,-1)
@@ -103,28 +111,74 @@ def run_simulation_benjamin(svr, scalery, X_test):
         fan_predictions[i] = fan_setting * 5
     
     predicted_internal_temp = predicted_tempteratures[:, 11]
-    svr_r2_sim = round(r2_score(test_true_result[0:N-12], predicted_internal_temp),2)
-    svr_mse_sim = round(math.sqrt(mean_squared_error(test_true_result[0:N-12], predicted_internal_temp)),2)
+    svr_r2_sim = round(r2_score(test_true_result[0:len(test_true_times)-12], predicted_internal_temp),2)
+    svr_mse_sim = round(math.sqrt(mean_squared_error(test_true_result[0:len(test_true_times)-12], predicted_internal_temp)),2)
 
-    predict_mae = mean_absolute_error(test_true_result[0:N-12], predicted_internal_temp)
+    predict_mae = mean_absolute_error(test_true_result[0:len(test_true_times)-12], predicted_internal_temp)
     print("MAE=" + str(predict_mae))
-    MBE(test_true_result[0:N-12], predicted_internal_temp)
+    MBE(test_true_result[0:len(test_true_times)-12], predicted_internal_temp)
     print("R2=" + str(svr_r2_sim))
     print("RMSE: " + str(svr_mse_sim))
     
     return predicted_internal_temp, tempterature_errors, fan_predictions
 
+    
+def run_simulation_keegan(svr, scalery, test_true_times, X_test):
+    prev_fan = 0
+    j = 0
+    predicted_internal_temp = []
+    tempterature_errors = np.zeros((len(test_true_times)-12,12))
+    fan_pred = []
 
-def plot_data(test_true_result, plot_array, X_test, fan_pred, error_array, true_test_times):
-    N = len(true_test_times)
-    # N = len(test_true_result)
+    while len(test_true_times)-j > 12:
+        pred_vec = []
+        input_sim = X_test[j,:]
+        
+        for i in range(0,12):
+            input_sim = input_sim.reshape(1,-1)
+                                
+            predicted_scaled_temp = svr.predict(input_sim)
+            predicted_tempterature = scalery.inverse_transform(predicted_scaled_temp.reshape(1,-1))
+            pred_vec.append(predicted_tempterature)
+            
+            tempterature_errors[j][i] = math.sqrt((test_true_result[j+i] - pred_vec[i])**2)
+            
+            if i == 11:  
+                predicted_internal_temp.append(pred_vec[i])
+                fan_pred.append(prev_fan*5)
 
-    x_labels = np.arange(0,N,1)
+            prev_sol = X_test[j+i,0]
+            prev_outside_temp = X_test[j+i,1]
+            prev_predicted_temp = pred_vec[i-1].reshape(-1,1)
+            prev_inside_temp_scaled = scalery.transform(prev_predicted_temp)[0, 0]
 
-    plt.plot(x_labels[0:N-12],test_true_result[0:N-12], color='blue', alpha = 0.8, label='Actual Temperature')
-    plt.plot(x_labels[0:N-12],plot_array, color='red', alpha=0.7, label='Predicted Temperature (1 hour ahead)')
-    plt.plot(x_labels[0:N-12], X_test[:N-12,3]*5, color='black', alpha=0.8, label='True Fan State')
-    plt.plot(x_labels[0:N-12], np.array(fan_pred)*0.8, color='green', label='Simulated Fan State')
+            input_sim = np.array([prev_sol, prev_outside_temp, prev_inside_temp_scaled, prev_fan])
+        
+            temp_temp = prev_predicted_temp[0,0]
+            prev_fan = fan_logic(prev_fan, temp_temp)
+            
+        j += 1
+
+    predicted_internal_temp = np.array(predicted_internal_temp)[:, 0, 0]
+    svr_r2_sim = round(r2_score(test_true_result[0:len(test_true_times)-12], predicted_internal_temp),2)
+    svr_mse_sim = round(math.sqrt(mean_squared_error(test_true_result[0:len(test_true_times)-12], predicted_internal_temp)),2)
+
+    predict_mae = mean_absolute_error(test_true_result[0:len(test_true_times)-12], predicted_internal_temp)
+    print("MAE=" + str(predict_mae))
+    MBE(test_true_result[0:len(test_true_times)-12], predicted_internal_temp)
+    print("R2=" + str(svr_r2_sim))
+    print("RMSE: " + str(svr_mse_sim))
+    
+    return predicted_internal_temp, tempterature_errors, fan_pred
+
+def plot_data(test_true_times, test_true_result, plot_array, X_test, fan_pred, error_array):
+
+    x_labels = np.arange(0,len(test_true_times),1)
+
+    plt.plot(x_labels[0:len(test_true_times)-12],test_true_result[0:len(test_true_times)-12], color='blue', alpha = 0.8, label='Actual Temperature')
+    plt.plot(x_labels[0:len(test_true_times)-12],plot_array, color='red', alpha=0.7, label='Predicted Temperature (1 hour ahead)')
+    plt.plot(x_labels[0:len(test_true_times)-12], X_test[:len(test_true_times)-12,3]*5, color='black', alpha=0.8, label='True Fan State')
+    plt.plot(x_labels[0:len(test_true_times)-12], np.array(fan_pred)*0.8, color='green', label='Simulated Fan State')
 
     plt.xlabel("Time (5-minute Intervals)", fontsize=15)
     plt.ylabel("Temperature (deg. C)", fontsize=15)
@@ -163,9 +217,9 @@ def fan_logic(previous_fan, temperature):
 if __name__ == "__main__":
     
     svr = train_svr_model()
-    test_true_result, X_test, scalery, inside_temp_sim, true_test_times = test_svr_model(svr)
-    plot_array, error_array, fan_pred = run_simulation_benjamin(svr, scalery, X_test)
-    plot_data(test_true_result, plot_array, X_test, fan_pred, error_array, true_test_times)
+    test_true_times, test_true_result, X_test, scalery, inside_temp_sim = test_svr_model(svr)
+    plot_array, error_array, fan_pred = run_simulation_benjamin(svr, scalery, test_true_times, X_test)
+    plot_data(test_true_times, test_true_result, plot_array, X_test, fan_pred, error_array)
     
     
     

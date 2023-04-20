@@ -43,11 +43,7 @@ X_test, Y_test = create_dataset(test, look_back)
 
 
 model = Sequential()
-# model.add(Dense(50, input_shape=(X_train.shape[1], X_train.shape[2])))
-# model.add(GRU(50, input_shape=(X_train.shape[1], X_train.shape[2])))
 model.add(LSTM(50, input_shape=(X_train.shape[1], X_train.shape[2])))
-# model.add()
-# model.add(Dense(100))
 model.add(Dense(1))
 # model.compile(loss='mean_absolute_error', optimizer='adam')
 model.compile(loss='mean_squared_error', optimizer='adam')
