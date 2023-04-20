@@ -63,7 +63,6 @@ def test_svr_model(svr):
     scalery = MinMaxScaler()
     X_test, test_y, df_test, scalery = load_test_data("Data/TestSet.csv")
     
-    test_true_times = df_test['Minute']
     test_true_result = np.array(df_test['Actual Temperature Middle ((T[n])'])
 
     # testing
@@ -75,7 +74,7 @@ def test_svr_model(svr):
     inside_temp_sim = []
     inside_temp_sim.append(scalery.inverse_transform(test_y[0].reshape(1,-1)))
 
-    return test_true_result, X_test, scalery, inside_temp_sim, test_true_times
+    return test_true_result, X_test, scalery, inside_temp_sim
 
 
 def run_simulation_benjamin(svr, scalery, X_test):
@@ -115,34 +114,33 @@ def run_simulation_benjamin(svr, scalery, X_test):
     return predicted_internal_temp, tempterature_errors, fan_predictions
 
 
-def plot_data(test_true_result, plot_array, X_test, fan_pred, error_array, true_test_times):
-    N = len(true_test_times)
-    # N = len(test_true_result)
+
+def plot_temperatrues(true_temperatures, predicted_temperatures, X_test, fan_pred):
+    N = len(true_temperatures)
 
     x_labels = np.arange(0,N,1)
 
-    plt.plot(x_labels[0:N-12],test_true_result[0:N-12], color='blue', alpha = 0.8, label='Actual Temperature')
-    plt.plot(x_labels[0:N-12],plot_array, color='red', alpha=0.7, label='Predicted Temperature (1 hour ahead)')
+    plt.plot(x_labels[0:N-12], true_temperatures[0:N-12], color='blue', alpha = 0.8, label='Actual Temperature')
+    plt.plot(x_labels[0:N-12], predicted_temperatures, color='red', alpha=0.7, label='Predicted Temperature (1 hour ahead)')
     plt.plot(x_labels[0:N-12], X_test[:N-12,3]*5, color='black', alpha=0.8, label='True Fan State')
     plt.plot(x_labels[0:N-12], np.array(fan_pred)*0.8, color='green', label='Simulated Fan State')
 
     plt.xlabel("Time (5-minute Intervals)", fontsize=15)
     plt.ylabel("Temperature (deg. C)", fontsize=15)
     plt.ylim(0, 37)
-    # plt.legend(loc=' left')\
     plt.legend(loc='center', bbox_to_anchor=(0.5, 1.1), ncol=2)
     plt.xticks(rotation=90)
     plt.grid(False)              
     plt.savefig('Imgs/Benjamin-result_1')    
     plt.show()
 
-    # Use this later
-    fig, ax = plt.subplots()
-    bp = ax.boxplot(error_array, showfliers=False, medianprops={'color': 'red'})
-    ax.set_xticklabels(np.arange(5, 5, 60))
-    ax.set_ylabel('Temperature')
-    ax.set_xlabel('Time Step Ahead (min)')
-    ax.set_title('5-min Ahead Predictions')
+def plot_prediction_errors(error_array):
+    plt.figure()
+    plt.boxplot(error_array, showfliers=False, medianprops={'color': 'red'})
+    plt.xticks(np.arange(0, 12, 1), np.arange(0, 60, 5))
+    plt.ylabel('Temperature')
+    plt.xlabel('Time Step Ahead (min)')
+    plt.title('5-min Ahead Predictions')
     plt.savefig('Imgs/Benjamin-result_2')    
 
     plt.show()
@@ -163,9 +161,10 @@ def fan_logic(previous_fan, temperature):
 if __name__ == "__main__":
     
     svr = train_svr_model()
-    test_true_result, X_test, scalery, inside_temp_sim, true_test_times = test_svr_model(svr)
+    test_true_result, X_test, scalery, inside_temp_sim = test_svr_model(svr)
     plot_array, error_array, fan_pred = run_simulation_benjamin(svr, scalery, X_test)
-    plot_data(test_true_result, plot_array, X_test, fan_pred, error_array, true_test_times)
+    plot_temperatrues(test_true_result, plot_array, X_test, fan_pred)
+    plot_prediction_errors(error_array)
     
     
     
