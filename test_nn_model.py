@@ -57,7 +57,9 @@ class MyNet(nn.Module):
         self.fc2 = nn.Linear(LAYER_SIZE, LAYER_SIZE)
         self.fc_out = nn.Linear(LAYER_SIZE, 1)
         
-        # self.loss = nn.MSELoss()
+        self.loss_function = nn.MSELoss()
+        self.optimizer = optim.Adam(self.parameters(), lr=0.001)
+        
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
@@ -65,6 +67,26 @@ class MyNet(nn.Module):
         x = torch.sigmoid(self.fc_out(x))
         
         return x
+    
+    def test_model(self, x):
+        x = torch.from_numpy(x).float()
+        y = self.forward(x)
+        
+        return y.detach().numpy()
+        
+    def train_model(self, x, targets):
+        x_tensor = torch.from_numpy(x).float()
+        targets_tensor = torch.from_numpy(targets[:, None]).float()
+        
+        y_predicted = self.forward(x_tensor)
+        loss = self.loss_function(y_predicted, targets_tensor)
+        
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        
+        return y_predicted.detach().numpy(), loss.item()
+        
 
 
 def select_mini_batch(x_data, y_data, batch_size = 100):
@@ -81,32 +103,23 @@ def test_nn_model_loss(model, x, y):
     predictions = model(x_tensor).detach()
     loss = (predictions.numpy() - y[:, None]) **2
     mean_loss = np.mean(loss)
-    print(f"TEST --> Mean loss: {mean_loss:.4f}, std loss: {np.std(loss):.4f}")
+    print(f"TEST --> Mean loss: {mean_loss:.6f}, std loss: {np.std(loss):.4f}")
     
     return np.mean(loss)
 
 
 def train_nn_model(x_train, y_train, x_test, y_test):
     model = MyNet()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    criterion = nn.MSELoss()
     
     train_losses, test_losses = [], []
     
-    for i in range(200):
+    for i in range(5):
         x, y = select_mini_batch(x_train, y_train, 100)
-        x_tensor = torch.from_numpy(x).float()
-        y_tensor = torch.from_numpy(y[:, None]).float()
-        outputs = model(x_tensor)
         
-        loss = criterion(outputs, y_tensor)
-        
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        outputs, loss = model.train_model(x, y)
     
-        print(f"Epoch {i+1} - loss: {loss.item():.4f}")
-        train_losses.append(loss.item())
+        print(f"Epoch {i+1} - loss: {loss:.4f}")
+        train_losses.append(loss)
         test_loss = test_nn_model_loss(model, x_test, y_test)
         test_losses.append(test_loss)
 
@@ -117,10 +130,38 @@ def train_nn_model(x_train, y_train, x_test, y_test):
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend(loc='best')
-    # plt.title('Training Losses')
-    plt.savefig('DevelImgs/train_losses_rnn1.svg')
+    plt.savefig('DevelImgs/train_losses_dnn.svg')
 
     return model
+
+def run_simulation_torch(model, scalery, x_test):
+    N = len(x_test)
+    
+    predicted_tempteratures = np.zeros((N-12,12)) 
+    fan_predictions = np.zeros(N-12)
+    tempterature_errors = np.zeros((N-12,12))
+    
+    model_inputs = x_test[:N-12, :] # (N-12, 4)
+    for i in range(12):
+        outputs = model.test_model(model_inputs) # (N-12, 1)
+        predicted_temperature_set = scalery.inverse_transform(outputs)[:, 0] # (N-12)
+        predicted_tempteratures[:, i] = predicted_temperature_set
+        true_values = true_temperatures[i:N-(12-i), 0]
+        predictions = predicted_temperature_set
+        errors = np.sqrt((predictions - true_values)**2)
+        tempterature_errors[:, i] = errors
+        # tempterature_errors[:, i] = math.sqrt((true_temperatures[i:N-(12-i)] - predicted_temperature_set)**2)
+        
+        fan_modes = fan_logic_array(model_inputs[:, 3], predicted_temperature_set)
+        model_inputs = x_test[i+1:N-(11-i), :]
+        model_inputs[:, 2] = outputs[:, 0]
+        model_inputs[:, 3] = fan_modes
+        
+    fan_predictions = fan_modes # last prediction.
+    predicted_internal_temp = predicted_temperature_set # last prediction.
+
+    
+    return predicted_internal_temp, tempterature_errors, fan_predictions
 
 
 
@@ -150,7 +191,15 @@ def run_simulation_benjamin(model, scalery, X_test):
     
     return predicted_internal_temp, tempterature_errors, fan_predictions
 
-    
+
+def fan_logic_array(previous_fans, temperatures):
+    new_fans = np.zeros(len(previous_fans))
+    for i in range(len(previous_fans)):
+        new_fans[i] = fan_logic(previous_fans[i], temperatures[i])
+        
+    return new_fans
+
+#TODO: njit this    
 def fan_logic(previous_fan, temperature):
     if previous_fan == 1 and temperature > 22:
         new_fan_setting = 1
@@ -216,10 +265,12 @@ if __name__ == "__main__":
     
     true_temperatures = scalery.inverse_transform(y_test.reshape(-1, 1))
     
-    predicted_temperatures, error_array, fan_pred = run_simulation_benjamin(model, scalery, x_test)
+    predicted_temperatures, error_array, fan_pred = run_simulation_torch(model, scalery, x_test)
     calculate_metrics(predicted_temperatures, true_temperatures)
     plot_temperatrues(true_temperatures, predicted_temperatures, x_test, fan_pred)
     plot_prediction_errors(error_array)
+    predicted_temperatures, error_array, fan_pred = run_simulation_benjamin(model, scalery, x_test)
+    calculate_metrics(predicted_temperatures, true_temperatures)
     
     
     
