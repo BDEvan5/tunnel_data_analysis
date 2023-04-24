@@ -63,26 +63,53 @@ class MyNet(nn.Module):
         self.fc2 = nn.Linear(128, 1)
 
     def forward(self, x):
-        x = x.view(-1, 4)
+        # x = x.view(-1, 4)
         x = self.relu(self.fc1(x))
         x = self.fc2(x)
-        x = torch.tanh(x)
+        x = torch.sigmoid(x)
         return x
+
+def select_mini_batch(x_data, y_data, batch_size = 100):
+    num_samples = x_data.shape[0]
+    batch_indices = np.random.choice(num_samples, batch_size, replace=False)
+    # print(batch_indices[0:8])
+
+    x = x_data[batch_indices]
+    y = y_data[batch_indices]
+
+    return x, y
+
+def test_nn_model_r2(model, x, y):
+    x_tensor = torch.from_numpy(x).float()
+    predictions = model(x_tensor).detach()
+    loss = (predictions.numpy() - y) **2
+    print(f"TEST --> Mean loss: {np.mean(loss):.4f}, std loss: {np.std(loss):.4f}")
+
 
 def train_nn_model():
     X_train, train_y = load_train_data("Data/training.csv")
-    X_train = torch.from_numpy(X_train).float()
-    train_y = torch.from_numpy(train_y).float()
+    X_test, test_y, scalery = load_test_data("Data/TestSet.csv")
     
     model = MyNet()
-    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    # optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.MSELoss()
     
     losses = []
     
-    for i in range(100):
-        outputs = model(X_train)
-        loss = criterion(outputs, train_y)
+    # for i in range(20):
+    for i in range(1000):
+        x, y = select_mini_batch(X_train, train_y, 1000)
+        x_tensor = torch.from_numpy(x).float()
+        y_tensor = torch.from_numpy(y).float()
+        outputs = model(x_tensor)
+        
+        out_np = outputs.clone().detach().numpy()
+        loss = (out_np - y) **2
+        print(f"Mean loss: {np.mean(loss):.4f}, std loss: {np.std(loss):.4f}")
+        test_nn_model_r2(model, X_test, test_y)
+        
+        loss = criterion(outputs, y_tensor)
         
         optimizer.zero_grad()
         loss.backward()
@@ -102,12 +129,34 @@ def train_nn_model():
 
     return model
 
+import torch
+
+def r2_score(y_pred, y_true):
+    """
+    Computes R^2 score between y_true and y_pred.
+
+    Args:
+        y_pred (torch.Tensor): predicted values of shape (batch_size, 1)
+        y_true (torch.Tensor): true values of shape (batch_size, 1)
+
+    Returns:
+        torch.Tensor: R^2 score
+    """
+    ss_total = np.sum((y_true - np.mean(y_true)) ** 2)
+    ss_result = np.sum((y_pred - y_true) ** 2)
+    r2 = 1 - ss_result / ss_total
+    
+    # ss_tot = torch.sum((y_true - torch.mean(y_true)) ** 2)
+    # ss_res = torch.sum((y_true - y_pred) ** 2)
+    # r2 = 1 - ss_res / ss_tot
+    return r2
+
 
 def test_nn_model(model):
-    scalery = MinMaxScaler()
     X_test, test_y, scalery = load_test_data("Data/TestSet.csv")
     true_temperatures = scalery.inverse_transform(test_y.reshape(-1, 1))
 
+    
     return X_test, true_temperatures, scalery
 
 
