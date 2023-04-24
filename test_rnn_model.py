@@ -106,7 +106,6 @@ def run_simulation_benjamin(model, scalery, X_test):
         input_sim = X_test[i,:].reshape(1,-1)
         
         for j in range(12): # predicts 12x5 minute steps ahead
-            # predicted_scaled_temp = svr.predict(input_sim)
             predicted_scaled_temp = model(input_sim).detach().numpy()
             predicted_tempterature = scalery.inverse_transform(predicted_scaled_temp.reshape(1,-1))
             predicted_tempteratures[i,j] = predicted_tempterature
