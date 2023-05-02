@@ -24,7 +24,7 @@ LAYER_SIZE = 256
 def modify_data(x, y):
     N = len(x) - 24
     N = N - (N%12)
-    N = 1000 #? debugging term
+    # N = 1000 #? debugging term
     print(f"X shape: {x.shape}")
     xp, yp = np.zeros((N, 72)), np.zeros((N, 12))
     for i in range(N):
@@ -65,7 +65,7 @@ class MyNet(nn.Module):
         
     def train_model(self, x, targets):
         x_tensor = torch.from_numpy(x).float()
-        targets_tensor = torch.from_numpy(targets[:, None]).float()
+        targets_tensor = torch.from_numpy(targets).float()
         
         y_predicted = self.forward(x_tensor)
         loss = self.loss_function(y_predicted, targets_tensor)
@@ -114,7 +114,7 @@ def run_simulation_LN(model, scalery, x_test, true_temperatures):
     predicted_temperatures = scalery.inverse_transform(outputs) # (N, 12)
 
     predicted_internal_temp = predicted_temperatures[:, -1]
-    tempterature_errors = true_temperatures - predicted_temperatures
+    tempterature_errors = np.abs(true_temperatures - predicted_temperatures)
 
     fan_predictions = np.ones(N)
     
@@ -124,7 +124,6 @@ def plot_simulation(model, scalery, x, true_temperatures):
     N = len(x)
     outputs = model.test_model(x) # (N, 12)
     predicted_temperatures = scalery.inverse_transform(outputs) # (N, 12)
-
 
     plt.figure(1)
     for i in range(N):
@@ -140,7 +139,7 @@ def plot_simulation(model, scalery, x, true_temperatures):
 
     
 
-def plot_temperatrues(true_temperatures, predicted_temperatures, X_test, fan_pred, run_data):
+def plot_temperatrues(true_temperatures, predicted_temperatures, X_test, fan_pred, run_data, mode):
     N = len(true_temperatures)
 
     x_labels = np.arange(N)
@@ -150,22 +149,23 @@ def plot_temperatrues(true_temperatures, predicted_temperatures, X_test, fan_pre
 
     plt.xlabel("Time (5-minute Intervals)", fontsize=15)
     plt.ylabel("Temperature (deg. C)", fontsize=15)
-    plt.ylim(0, 37)
+    plt.ylim(8, 40)
+    # plt.ylim(0, 37)
     plt.legend(loc='center', bbox_to_anchor=(0.5, 1.1), ncol=2)
     plt.xticks(rotation=90)
     plt.grid(False)              
-    plt.savefig(f'{run_data.path}nn_result_1.svg')    
-    plt.savefig(f'{run_data.path}nn_result_1.pdf')    
+    plt.savefig(f'{run_data.path}nn_result_{mode}_1.svg')    
+    plt.savefig(f'{run_data.path}nn_result_{mode}_1.pdf')    
 
-def plot_prediction_errors(error_array, run_data):
+def plot_prediction_errors(error_array, run_data, mode):
     plt.figure()
     plt.boxplot(error_array, showfliers=False, medianprops={'color': 'red'})
     plt.xticks(np.arange(0, 12, 1), np.arange(0, 60, 5))
     plt.ylabel('Temperature')
     plt.xlabel('Time Step Ahead (min)')
     plt.title('5-min Ahead Predictions')
-    plt.savefig(f'{run_data.path}nn_result_2.svg')    
-    plt.savefig(f'{run_data.path}nn_result_2.pdf')    
+    plt.savefig(f'{run_data.path}nn_result_{mode}_2.svg')    
+    plt.savefig(f'{run_data.path}nn_result_{mode}_2.pdf')    
 
 
 def plot_data_tuple(x, y, predict_y, i):
@@ -207,9 +207,9 @@ if __name__ == "__main__":
     x_train, y_train, x_test, y_test, scalery = load_data("Data/training.csv", "Data/TestSet.csv")
     
     run_data = {"name": "DevelLN",
-                "batch_size": 50,
-                "epochs": 10}
-                # "epochs": 60}
+                "batch_size": 80,
+                # "epochs": 10}
+                "epochs": 60}
     
     run_data["path"] = "RunData/" + run_data["name"] + "/"
     if not os.path.exists(run_data["path"]):
@@ -225,20 +225,19 @@ if __name__ == "__main__":
     model = train_nn_model(x_train, y_train, x_test, y_test, run_data)
     
     true_train_temperatures = scalery.inverse_transform(y_train)
-    # predicted_temperatures, error_array, fan_pred = run_simulation_LN(model, scalery, x_train, true_train_temperatures)
-    plot_simulation(model, scalery, x_train, true_train_temperatures)
+    predicted_temperatures, error_array, fan_pred = run_simulation_LN(model, scalery, x_train, true_train_temperatures)
+    # plot_simulation(model, scalery, x_train, true_train_temperatures)
     
-    print_metric_file(run_data, predicted_temperatures, true_train_temperatures[:, -1])
-    plot_temperatrues(true_train_temperatures[:, -1], predicted_temperatures, x_test, fan_pred, run_data)
-    plot_prediction_errors(error_array, run_data)
+    print_metric_file(run_data, predicted_temperatures, true_train_temperatures[:, -1], "Training")
+    plot_temperatrues(true_train_temperatures[:, -1], predicted_temperatures, x_test, fan_pred, run_data, "Training")
+    plot_prediction_errors(error_array, run_data, "Training")
     
     
-    # true_temperatures = scalery.inverse_transform(y_test[:, -1])
-    # predicted_temperatures, error_array, fan_pred = run_simulation_LN(model, scalery, x_test, true_temperatures)
+    true_temperatures = scalery.inverse_transform(y_test)
+    predicted_temperatures, error_array, fan_pred = run_simulation_LN(model, scalery, x_test, true_temperatures)
     
-    # calculate_metrics(predicted_temperatures, true_temperatures[:, -1])
-    # print_metric_file(run_data, predicted_temperatures, true_temperatures[:, -1])
-    # plot_temperatrues(true_temperatures[:, -1], predicted_temperatures, x_test, fan_pred, run_data)
-    # plot_prediction_errors(error_array, run_data)
+    print_metric_file(run_data, predicted_temperatures, true_temperatures[:, -1], "Testing")
+    plot_temperatrues(true_temperatures[:, -1], predicted_temperatures, x_test, fan_pred, run_data, "Testing")
+    plot_prediction_errors(error_array, run_data, "Testing")
     
     

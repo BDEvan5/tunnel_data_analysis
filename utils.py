@@ -40,7 +40,7 @@ def calculate_metrics(predicted_temperatures, true_temperatures):
     print("R2=" + str(svr_r2_sim))
     print("RMSE: " + str(svr_mse_sim)) 
 
-def print_metric_file(run_data, predicted_temperatures, true_temperatures, print_data=True):
+def print_metric_file(run_data, predicted_temperatures, true_temperatures, print_data=True, mode="Training"):
     N = len(true_temperatures)
     svr_r2_sim = round(r2_score(true_temperatures, predicted_temperatures),2)
     svr_mse_sim = round(math.sqrt(mean_squared_error(true_temperatures, predicted_temperatures)),2)
@@ -56,7 +56,7 @@ def print_metric_file(run_data, predicted_temperatures, true_temperatures, print
         print(f"R2: {svr_r2_sim}")
         print(f"--------------------------------------\n")
 
-    with open(run_data.path + "Metrics.txt", 'w') as f:
+    with open(run_data.path + f"{mode}Metrics.txt", 'w') as f:
         f.write("Metrics\n")
         f.write(f"RMSE: {svr_mse_sim}\n")
         f.write(f"MAE: {predict_mae}\n")
