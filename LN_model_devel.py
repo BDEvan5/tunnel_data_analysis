@@ -11,29 +11,12 @@ import torch.optim as optim
 import torch.nn.functional as F
 from numba import njit
 
+from utils import *
+
 torch.use_deterministic_algorithms(True)
 torch.manual_seed(101)
 np.random.seed(101)
 
-def MBE(y_true, y_pred):
-    '''
-    Parameters:
-        y_true (array): Array of observed values
-        y_pred (array): Array of prediction values
-
-    Returns:
-        mbe (float): Biais score
-    '''
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-    
-    y_true = y_true.reshape(len(y_true),1)
-    
-    y_pred = y_pred.reshape(-1, 1)   
-    diff = (y_true-y_pred)
-    mbe = diff.mean()
-    print('MBE = ', mbe)
-    
     
 def load_data(train_data, test_data):
     data = pd.read_csv(train_data)
@@ -52,35 +35,42 @@ def load_data(train_data, test_data):
         
     return x_train, y_train, x_test, y_test, scalery
 
-def format_data_lstm(x, y, window_size):
-    xs, ys = [], []
-    for i in range(len(x)-window_size):
-        xs.append(x[i:i+window_size])
-        ys.append(y[i+window_size])
-        
-    xs = np.array(xs)
-    ys = np.array(ys)
+def modify_data(x, y):
+    N = len(x) - 24
+    N = N - (N%12)
+    print(f"X shape: {x.shape}")
+    xp, yp = np.zeros((N, 72)), np.zeros((N, 12))
+    for i in range(N):
+        dx1 = x[i:(i+12), :].reshape(48, 1)
+        dx2 = x[(i+12):(i+24), 0:2].reshape(24, 1)
+        dx = np.vstack([dx1, dx2])
+        xp[i] = dx[:, 0]
+        # print(dx)
+
+        dy = y[(i+12):(i+24)]
+        yp[i] = dy
+        # print(dy)
     
-    return xs, ys
+    return xp, yp
 
 
+
+# LAYER_SIZE = 500
 LAYER_SIZE = 256 
 
-class MyRNNet(nn.Module):
-    def __init__(self, num_lstm_layers):
-        super(MyRNNet, self).__init__()
-        # self.fc1 = nn.Linear(4, LAYER_SIZE)
-        self.lstm = nn.LSTM(4, LAYER_SIZE, num_lstm_layers, batch_first=True)
+class MyNet(nn.Module):
+    def __init__(self, input, output):
+        super(MyNet, self).__init__()
+        self.fc1 = nn.Linear(input, LAYER_SIZE)
         self.fc2 = nn.Linear(LAYER_SIZE, LAYER_SIZE)
-        self.fc_out = nn.Linear(LAYER_SIZE, 1)
+        self.fc_out = nn.Linear(LAYER_SIZE, output)
         
         self.loss_function = nn.MSELoss()
         self.optimizer = optim.Adam(self.parameters(), lr=0.001)
         
     def forward(self, x):
-        l1, l2 = self.lstm(x) # (n, window)
-        
-        x = torch.relu(self.fc2(l1[:, -1, :]))
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
         x = torch.sigmoid(self.fc_out(x))
         
         return x
@@ -125,13 +115,13 @@ def test_nn_model_loss(model, x, y):
     return np.mean(loss)
 
 
-def train_rnn_model(x_train, y_train, x_test, y_test, epochs):
-    model = MyRNNet(x_train.shape[1])
+def train_nn_model(x_train, y_train, x_test, y_test, epochs):
+    model = MyNet(72, 12)
     
     train_losses, test_losses = [], []
     
     for i in range(epochs):
-        x, y = select_mini_batch(x_train, y_train, 200)
+        x, y = select_mini_batch(x_train, y_train, 100)
         
         outputs, loss = model.train_model(x, y)
     
@@ -151,29 +141,16 @@ def train_rnn_model(x_train, y_train, x_test, y_test, epochs):
 
     return model
 
-def run_simulation_torch(model, scalery, x_test):
-    # THIS NEEDS TO BE UDATED FOR LSTM TO TAKE THE WINDOW DIMENSION INTO ACCOUNT FOR THE PREDICTION
-    #TODO: FIX THIS BY ROLLING THE STATES TO TAKE MULTIPLE NEW STATES INTO ACCOUNT
+def run_simulation_LN(model, scalery, x_test, true_temperatures):
     N = len(x_test)
     
-    predicted_tempteratures = np.zeros((N-12,12)) 
-    fan_predictions = np.zeros(N-12)
-    tempterature_errors = np.zeros((N-12,12))
-    
-    model_inputs = x_test[:N-12, :] # (N-12, 4)
-    for i in range(12):
-        outputs = model.test_model(model_inputs) # (N-12, 1)
-        predicted_temperature_set = scalery.inverse_transform(outputs)[:, 0] # (N-12)
-        tempterature_errors[:, i] = np.sqrt((true_temperatures[i:N-(12-i), 0] - predicted_temperature_set)**2)
-        predicted_tempteratures[:, i] = predicted_temperature_set
-        
-        fan_modes = fan_logic_array(model_inputs[:, -1, 3], predicted_temperature_set)
-        model_inputs = x_test[i+1:N-(11-i), :]
-        model_inputs[:, -1, 2] = outputs[:, 0]
-        model_inputs[:, 3] = fan_modes
-        
-    fan_predictions = fan_modes*5 # last prediction.
-    predicted_internal_temp = predicted_temperature_set # last prediction.
+    outputs = model.test_model(x_test) # (N, 12)
+    predicted_temperatures = scalery.inverse_transform(outputs) # (N, 12)
+
+    predicted_internal_temp = predicted_temperatures[:, -1]
+    tempterature_errors = true_temperatures - predicted_temperatures
+
+    fan_predictions = np.ones(N)
     
     return predicted_internal_temp, tempterature_errors, fan_predictions
 
@@ -202,12 +179,12 @@ def fan_logic(previous_fan, temperature):
 
 def calculate_metrics(predicted_temperatures, true_temperatures):
     N = len(true_temperatures)
-    svr_r2_sim = round(r2_score(true_temperatures[0:N-12], predicted_temperatures),2)
-    svr_mse_sim = round(math.sqrt(mean_squared_error(true_temperatures[0:N-12], predicted_temperatures)),2)
+    svr_r2_sim = round(r2_score(true_temperatures, predicted_temperatures),2)
+    svr_mse_sim = round(math.sqrt(mean_squared_error(true_temperatures, predicted_temperatures)),2)
 
-    predict_mae = mean_absolute_error(true_temperatures[0:N-12], predicted_temperatures)
+    predict_mae = mean_absolute_error(true_temperatures, predicted_temperatures)
     print("MAE=" + str(predict_mae))
-    MBE(true_temperatures[0:N-12], predicted_temperatures)
+    MBE(true_temperatures, predicted_temperatures)
     print("R2=" + str(svr_r2_sim))
     print("RMSE: " + str(svr_mse_sim))
     
@@ -217,10 +194,10 @@ def plot_temperatrues(true_temperatures, predicted_temperatures, X_test, fan_pre
 
     x_labels = np.arange(0,N,1)
 
-    plt.plot(x_labels[0:N-12], true_temperatures[0:N-12], color='blue', alpha = 0.8, label='Actual Temperature')
-    plt.plot(x_labels[0:N-12], predicted_temperatures, color='red', alpha=0.7, label='Predicted Temperature (1 hour ahead)')
-    plt.plot(x_labels[0:N-12], X_test[:N-12,3]*5, color='black', alpha=0.8, label='True Fan State')
-    plt.plot(x_labels[0:N-12], np.array(fan_pred)*0.8, color='green', label='Simulated Fan State')
+    plt.plot(x_labels, true_temperatures, color='blue', alpha = 0.8, label='Actual Temperature')
+    plt.plot(x_labels, predicted_temperatures, color='red', alpha=0.7, label='Predicted Temperature (1 hour ahead)')
+    # plt.plot(x_labels, X_test[:N-12,3]*5, color='black', alpha=0.8, label='True Fan State')
+    # plt.plot(x_labels, np.array(fan_pred)*0.8, color='green', label='Simulated Fan State')
 
     plt.xlabel("Time (5-minute Intervals)", fontsize=15)
     plt.ylabel("Temperature (deg. C)", fontsize=15)
@@ -245,17 +222,16 @@ def plot_prediction_errors(error_array):
     
 if __name__ == "__main__":
     x_train, y_train, x_test, y_test, scalery = load_data("Data/training.csv", "Data/TestSet.csv")
-    x_train, y_train = format_data_lstm(x_train, y_train, 5)
-    x_test, y_test = format_data_lstm(x_test, y_test, 5)
+    x_train, y_train = modify_data(x_train, y_train)
+    x_test, y_test = modify_data(x_test, y_test)
+
+    model = train_nn_model(x_train, y_train, x_test, y_test, 100)
     
-    model = train_rnn_model(x_train, y_train, x_test, y_test, 2)
-    # model = train_rnn_model(x_train, y_train, x_test, y_test, 100)
+    true_temperatures = scalery.inverse_transform(y_test)
+    predicted_temperatures, error_array, fan_pred = run_simulation_LN(model, scalery, x_test, true_temperatures)
     
-    true_temperatures = scalery.inverse_transform(y_test.reshape(-1, 1))
-    predicted_temperatures, error_array, fan_pred = run_simulation_torch(model, scalery, x_test)
-    
-    calculate_metrics(predicted_temperatures, true_temperatures)
-    plot_temperatrues(true_temperatures, predicted_temperatures, x_test, fan_pred)
+    calculate_metrics(predicted_temperatures, true_temperatures[:, -1])
+    plot_temperatrues(true_temperatures[:, -1], predicted_temperatures, x_test, fan_pred)
     plot_prediction_errors(error_array)
     
     

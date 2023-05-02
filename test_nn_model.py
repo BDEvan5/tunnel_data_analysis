@@ -11,8 +11,12 @@ import torch.optim as optim
 import torch.nn.functional as F
 from numba import njit
 
+from utils import *
 
-    
+torch.use_deterministic_algorithms(True)
+torch.manual_seed(101)
+np.random.seed(101)
+
     
 def load_data(train_data, test_data):
     data = pd.read_csv(train_data)
@@ -31,6 +35,7 @@ def load_data(train_data, test_data):
         
     return x_train, y_train, x_test, y_test, scalery
 
+# LAYER_SIZE = 500
 LAYER_SIZE = 256 
 
 class MyNet(nn.Module):
@@ -211,6 +216,7 @@ if __name__ == "__main__":
     model = train_nn_model(x_train, y_train, x_test, y_test, 200)
     
     true_temperatures = scalery.inverse_transform(y_test.reshape(-1, 1))
+    #! true temperatures are not being passes here...
     predicted_temperatures, error_array, fan_pred = run_simulation_torch(model, scalery, x_test)
     
     calculate_metrics(predicted_temperatures, true_temperatures)
