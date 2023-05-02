@@ -25,6 +25,7 @@ def load_data(train_data, test_data):
     
     x_train = scalerx.fit_transform(data[['Solar Radiation (W/m^2)', 'Outside Temperature (T[n-1])','Inside Temperature Middle (T[n-1])', 'Fan on/off']].to_numpy())
     y_train = scalery.fit_transform(data[['Actual Temperature Middle ((T[n])']].to_numpy())[:, 0]
+    # solar_train = data[['Solar Radiation (W/m^2)']].to_numpy()
 
     data = pd.read_csv(test_data)
     
@@ -38,13 +39,14 @@ def load_data(train_data, test_data):
 def modify_data(x, y):
     N = len(x) - 24
     N = N - (N%12)
+    N = 1000 #? debugging term
     print(f"X shape: {x.shape}")
     xp, yp = np.zeros((N, 72)), np.zeros((N, 12))
     for i in range(N):
-        dx1 = x[i:(i+12), :].reshape(48, 1)
-        dx2 = x[(i+12):(i+24), 0:2].reshape(24, 1)
-        dx = np.vstack([dx1, dx2])
-        xp[i] = dx[:, 0]
+        dx1 = x[i:(i+12), :]
+        dx2 = x[(i+12):(i+24), 0:2]
+        dx = np.hstack([dx1, dx2])
+        xp[i] = dx.reshape(72)
         # print(dx)
 
         dy = y[(i+12):(i+24)]
@@ -121,15 +123,17 @@ def train_nn_model(x_train, y_train, x_test, y_test, epochs):
     train_losses, test_losses = [], []
     
     for i in range(epochs):
-        x, y = select_mini_batch(x_train, y_train, 100)
+        x, y = select_mini_batch(x_train, y_train, 10)
         
         outputs, loss = model.train_model(x, y)
+        # plot_data_tuple(x, y, outputs, 0)
     
         print(f"Epoch {i+1} - loss: {loss:.6f}")
         train_losses.append(loss)
         test_loss = test_nn_model_loss(model, x_test, y_test)
         test_losses.append(test_loss)
 
+    plt.figure(2)
     plt.plot(train_losses, label='Train loss')
     plt.plot(test_losses, label='Test loss')
     plt.grid(True)
@@ -138,6 +142,7 @@ def train_nn_model(x_train, y_train, x_test, y_test, epochs):
     plt.ylabel('Loss')
     plt.legend(loc='best')
     plt.savefig('DevelImgs/train_losses_dnn.svg')
+    plt.savefig('DevelImgs/train_losses_dnn.pdf')
 
     return model
 
@@ -219,7 +224,41 @@ def plot_prediction_errors(error_array):
 
     plt.show()
 
+def plot_data_tuple(x, y, predict_y, i):
+    """
+    Args:
+        x (ndarray(72)): x data
+        y ndarray(12): temperatures
+    """
+    x = x[i, :].reshape(12, 6)
+
+    internal_temp = x[:, 2]
     
+    # solar_radiation = x[i, 0:12]
+    # outside_temp = x[i, 12:24]
+    # internal_temp = x[i, 24:36]
+    # fan_mode = x[i, 36:48]
+    # y_solar = x[i, 48:60]
+    # y_outside = x[i, 60:72]
+
+    y_inside_temp = y[i, :]
+    predict_y = predict_y[i, :]
+
+    plt.figure(1)
+    plt.clf()
+    # print
+    plt.plot(np.arange(12), internal_temp, label="InputX")
+    plt.plot(np.arange(12, 24), y_inside_temp, label="True Temp")
+    plt.plot(np.arange(12, 24), predict_y, label="Prediction")
+    # plt.plot(np.arange(12), outside_temp, label="OutX")
+
+    plt.legend()
+
+    # plt.show()
+    plt.pause(0.1)
+
+
+
 if __name__ == "__main__":
     x_train, y_train, x_test, y_test, scalery = load_data("Data/training.csv", "Data/TestSet.csv")
     x_train, y_train = modify_data(x_train, y_train)
