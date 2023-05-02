@@ -17,8 +17,8 @@ np.random.seed(101)
 
 #HYPERPARAMETERS
 
-LAYER_SIZE = 500
-# LAYER_SIZE = 256  
+# LAYER_SIZE = 500
+LAYER_SIZE = 256  
 
 
 def modify_data(x, y):
@@ -26,14 +26,14 @@ def modify_data(x, y):
     N = N - (N%12)
     # N = 1000 #? debugging term
     print(f"X shape: {x.shape}")
-    xp, yp = np.zeros((N, 72)), np.zeros((N, 12))
+    xp, yp = np.zeros((N, 72)), np.zeros((N, 1))
     for i in range(N):
         dx1 = x[i:(i+12), :]
         dx2 = x[(i+12):(i+24), 0:2]
         dx = np.hstack([dx1, dx2])
         xp[i] = dx.reshape(72)
 
-        dy = y[(i+12):(i+24)]
+        dy = y[(i+12)]
         yp[i] = dy
     
     return xp, yp
@@ -79,7 +79,7 @@ class MyNet(nn.Module):
 
 
 def train_nn_model(x_train, y_train, x_test, y_test, run_data):
-    model = MyNet(72, 12)
+    model = MyNet(72, 1)
     
     train_losses, test_losses = [], []
     
@@ -119,6 +119,32 @@ def run_simulation_LN(model, scalery, x_test, true_temperatures):
     fan_predictions = np.ones(N)
     
     return predicted_internal_temp, tempterature_errors, fan_predictions
+
+
+def run_simulation_torch(model, scalery, x_test):
+    N = len(x_test)
+    
+    predicted_tempteratures = np.zeros((N-12,12)) 
+    fan_predictions = np.zeros(N-12)
+    tempterature_errors = np.zeros((N-12,12))
+    
+    model_inputs = x_test[:N-12, :] # (N-12, 4)
+    for i in range(12):
+        outputs = model.test_model(model_inputs) # (N-12, 1)
+        predicted_temperature_set = scalery.inverse_transform(outputs)[:, 0] # (N-12)
+        tempterature_errors[:, i] = np.sqrt((true_temperatures[i:N-(12-i), 0] - predicted_temperature_set)**2)
+        predicted_tempteratures[:, i] = predicted_temperature_set
+        
+        fan_modes = fan_logic_array(model_inputs[:, 3], predicted_temperature_set)
+        model_inputs = x_test[i+1:N-(11-i), :]
+        model_inputs[:, 2] = outputs[:, 0]
+        model_inputs[:, 3] = fan_modes
+        
+    fan_predictions = fan_modes*5 # last prediction.
+    predicted_internal_temp = predicted_temperature_set # last prediction.
+    
+    return predicted_internal_temp, tempterature_errors, fan_predictions
+
 
 def plot_simulation(model, scalery, x, true_temperatures):
     N = len(x)
