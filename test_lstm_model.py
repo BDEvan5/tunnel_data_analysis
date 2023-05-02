@@ -11,6 +11,10 @@ import torch.optim as optim
 import torch.nn.functional as F
 from numba import njit
 
+torch.use_deterministic_algorithms(True)
+torch.manual_seed(101)
+np.random.seed(101)
+
 def MBE(y_true, y_pred):
     '''
     Parameters:

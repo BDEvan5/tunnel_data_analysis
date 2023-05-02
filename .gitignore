@@ -124,3 +124,9 @@ dmypy.json
 .pyre/
 
 DevelImgs/
+
+RunData/DevelLN/
+
+RunData/StdNN/
+
+RunData/StdSVR/
